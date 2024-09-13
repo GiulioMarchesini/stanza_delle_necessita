@@ -1,0 +1,31 @@
+.App {
+  text-align: center;
+}
+
+.Login,
+.RoomStatus {
+  margin: 20px;
+}
+
+input {
+  margin-right: 10px;
+}
+
+button {
+  margin: 10px;
+}
+
+table {
+  margin: 20px auto;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+th {
+  background-color: #f2f2f2;
+}

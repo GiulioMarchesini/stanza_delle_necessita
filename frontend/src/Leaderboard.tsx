@@ -1,12 +1,14 @@
-import React from 'react';
+// come props un array di user
+interface User {
+  username: string;
+  total_time: number;
+}
 
-function Leaderboard() {
-  const users = [
-    { username: 'utente1', time: 120 },
-    { username: 'utente2', time: 90 },
-    { username: 'utente3', time: 60 },
-  ];
+interface LeaderboardProps {
+  users: User[];
+}
 
+function Leaderboard({ users }: LeaderboardProps) {
   return (
     <table className="Leaderboard">
       <thead>
@@ -19,7 +21,7 @@ function Leaderboard() {
         {users.map((user, index) => (
           <tr key={index}>
             <td>{user.username}</td>
-            <td>{user.time}</td>
+            <td>{user.total_time}</td>
           </tr>
         ))}
       </tbody>

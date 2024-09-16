@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Leaderboard from "./Leaderboard";
 
 const url = "http://127.0.0.1:8080";
+// TODO ottieni l'url
 // TODO metti tutti i tipi in un file a parte
 
 interface RoomStatusProps {

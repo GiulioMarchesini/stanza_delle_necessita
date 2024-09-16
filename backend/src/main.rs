@@ -141,3 +141,5 @@ fn update_leaderboard(username: &str, data: &web::Data<AppState>) {
     }
     println!("{:?}", leaderboard_guard);
 }
+
+// TODO controlla ip per occupare e liberare stanza

@@ -11,7 +11,7 @@ struct User {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct RoomState {
-    status: String,
+    status: String, // cambia status con is_free di tipo bool
     current_user: Option<String>,
     start_time: Option<u64>, // timestamp in secondi
     end_time: Option<u64>,   // timestamp in secondi
@@ -56,7 +56,6 @@ async fn free_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) ->
         end_time,
         ..
     }) = new_room;
-    // TODO debug qui, qualcosa non va
 
     // controlla che current_user e end_time siano presenti
     if current_user.is_none() || end_time.is_none() {
@@ -69,8 +68,10 @@ async fn free_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) ->
         room.status = "libera".to_string();
         room.current_user = None;
         room.end_time = end_time;
-        println!("{:?}", data);
-        update_leaderboard(current_user.as_ref(), &data);
+        println!("{:?}", room);
+        // il mutex di data è già lockato, non posso usare data direttamente
+        let time = (room.end_time.unwrap() - room.start_time.unwrap()) / 60;
+        update_leaderboard(current_user.as_ref(), time, &data);
         HttpResponse::Ok().json("Room freed")
     } else {
         HttpResponse::Ok().json("You cannot free the room")
@@ -117,17 +118,14 @@ async fn main() -> std::io::Result<()> {
             .service(occupy_room)
             .service(free_room)
     })
-    .bind("127.0.0.1:8080")?
+    .bind("192.168.0.61:8080")?
     .run()
     .await
 }
 
-fn update_leaderboard(username: &str, data: &web::Data<AppState>) {
+fn update_leaderboard(username: &str, time: u64, data: &web::Data<AppState>) {
     let mut leaderboard_guard = data.leaderboard.lock().unwrap();
-    let room_guard = data.room.lock().unwrap();
-    let time = room_guard.end_time.unwrap() - room_guard.start_time.unwrap();
-    // converto il tempo in minuti
-    let time = time / 60;
+    println!("tempo: {:?}", time);
     if let Some(user) = leaderboard_guard
         .iter_mut()
         .find(|u| u.username == username)
@@ -143,3 +141,5 @@ fn update_leaderboard(username: &str, data: &web::Data<AppState>) {
 }
 
 // TODO controlla ip per occupare e liberare stanza
+// TODO salva classifica in un file csv locale
+// TODO se stanza occupata per più di mezz'ora, libera automaticamente e non aggiornare leaderboard

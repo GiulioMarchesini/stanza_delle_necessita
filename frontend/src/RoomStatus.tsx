@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import Leaderboard from "./Leaderboard";
 
-const url = "http://127.0.0.1:8080";
+const url = "http://192.168.0.61:8080";
 // TODO ottieni l'url
 // TODO metti tutti i tipi in un file a parte
+// TODO rendi simpatici gli alert
 
 interface RoomStatusProps {
   username: string;
@@ -27,50 +28,55 @@ function RoomStatus({ username }: RoomStatusProps) {
   const [occupant, setOccupant] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<User[]>([]);
 
+  // fetch di stato stanza e chi la occupa. http request "/room_status"
+  async function fetchRoomStatus() {
+    const path: string = url + "/room_status";
+
+    try {
+      const response = await fetch(path);
+
+      if (response.ok) {
+        const result: RoomState = await response.json();
+        console.log(result); // Stampa la risposta del server
+        setIsRoomOccupied(result.status === "occupata");
+        setOccupant(result.current_user);
+      } else {
+        console.error("Errore nella richiesta:", response.statusText);
+      }
+    } catch (error) {
+      console.error("Errore:", error);
+    }
+  }
+
+  // fetch classifica. get request "/leaderboard
+  async function fetchLeaderboard() {
+    const path: string = url + "/leaderboard";
+
+    try {
+      const response = await fetch(path);
+
+      if (response.ok) {
+        const result: User[] = await response.json();
+        setLeaderboard(result);
+        console.log(result); // Stampa la risposta del server
+      } else {
+        console.error("Errore nella richiesta:", response.statusText);
+      }
+    } catch (error) {
+      console.error("Errore:", error);
+    }
+  }
+
   useEffect(() => {
-    // fetch di stato stanza e chi la occupa. http request "/room_status"
-    async function fetchRoomStatus() {
-      const path: string = url + "/room_status";
-
-      try {
-        const response = await fetch(path);
-
-        if (response.ok) {
-          const result: RoomState = await response.json();
-          console.log(result); // Stampa la risposta del server
-          setIsRoomOccupied(result.status === "occupata");
-          setOccupant(result.current_user);
-        } else {
-          console.error("Errore nella richiesta:", response.statusText);
-          alert("Errore nella richiesta: " + response.statusText);
-        }
-      } catch (error) {
-        console.error("Errore:", error);
-        alert("Errore: " + (error as Error).message);
-      }
-    }
     fetchRoomStatus();
-    // fetch classifica. get request "/leaderboard
-    async function fetchLeaderboard() {
-      const path: string = url + "/leaderboard";
-
-      try {
-        const response = await fetch(path);
-
-        if (response.ok) {
-          const result: User[] = await response.json();
-          setLeaderboard(result);
-          console.log(result); // Stampa la risposta del server
-        } else {
-          console.error("Errore nella richiesta:", response.statusText);
-          alert("Errore nella richiesta: " + response.statusText);
-        }
-      } catch (error) {
-        console.error("Errore:", error);
-        alert("Errore: " + (error as Error).message);
-      }
-    }
     fetchLeaderboard();
+
+    const interval = setInterval(() => {
+      fetchRoomStatus();
+      fetchLeaderboard();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
   async function occupyRoom() {
@@ -117,7 +123,6 @@ function RoomStatus({ username }: RoomStatusProps) {
       start_time: null,
       end_time: time,
     };
-    console.log(data);
 
     try {
       const response = await fetch(path, {
@@ -148,7 +153,7 @@ function RoomStatus({ username }: RoomStatusProps) {
     <div className="RoomStatus">
       <h2>Stato della stanza</h2>
       <p>La stanza è attualmente {isRoomOccupied ? "occupata" : "libera"}.</p>
-      {isRoomOccupied && occupant && (
+      {isRoomOccupied && occupant === username && (
         <>
           <p>La stanza è occupata da: {occupant}</p>
           <button onClick={freeRoom}>Libera la stanza</button>

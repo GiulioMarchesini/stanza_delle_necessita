@@ -1,7 +1,8 @@
 use actix_cors::Cors;
+use actix_files::Files;
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct User {
@@ -11,7 +12,7 @@ struct User {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct RoomState {
-    status: String, // cambia status con is_free di tipo bool
+    is_free: bool,
     current_user: Option<String>,
     start_time: Option<u64>, // timestamp in secondi
     end_time: Option<u64>,   // timestamp in secondi
@@ -31,13 +32,13 @@ async fn occupy_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) 
         ..
     }) = new_room;
 
-    if room.status == "libera" {
+    if room.is_free {
         // controlla che current_user e start_time siano presenti
         if current_user.is_none() || start_time.is_none() {
             return HttpResponse::BadRequest().json("current_user and start_time are required");
         }
 
-        room.status = "occupata".to_string();
+        room.is_free = false;
         println!("stanza occupata da User: {:?}", current_user);
         room.current_user = current_user;
         room.start_time = start_time;
@@ -62,16 +63,17 @@ async fn free_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) ->
         return HttpResponse::BadRequest().json("current_user and end_time are required");
     }
 
-    if room.status == "occupata" && room.current_user == current_user {
+    if !room.is_free && room.current_user == current_user {
         let current_user = current_user.unwrap();
         println!("stanza liberata da User: {:?}", current_user);
-        room.status = "libera".to_string();
+        room.is_free = true;
         room.current_user = None;
         room.end_time = end_time;
         println!("{:?}", room);
         // il mutex di data è già lockato, non posso usare data direttamente
         let time = (room.end_time.unwrap() - room.start_time.unwrap()) / 60;
-        update_leaderboard(current_user.as_ref(), time, &data);
+        let leaderboard_guard = data.leaderboard.lock().unwrap();
+        update_leaderboard(current_user.as_ref(), time, leaderboard_guard);
         HttpResponse::Ok().json("Room freed")
     } else {
         HttpResponse::Ok().json("You cannot free the room")
@@ -96,7 +98,7 @@ async fn leaderboard(data: web::Data<AppState>) -> impl Responder {
 async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
         room: Mutex::new(RoomState {
-            status: "libera".to_string(),
+            is_free: true,
             current_user: None,
             start_time: None,
             end_time: None,
@@ -117,14 +119,15 @@ async fn main() -> std::io::Result<()> {
             .service(leaderboard)
             .service(occupy_room)
             .service(free_room)
+            .service(Files::new("/", "./frontend/build").index_file("index.html"))
     })
     .bind("192.168.0.61:8080")?
     .run()
     .await
 }
 
-fn update_leaderboard(username: &str, time: u64, data: &web::Data<AppState>) {
-    let mut leaderboard_guard = data.leaderboard.lock().unwrap();
+fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGuard<Vec<User>>) {
+    // let mut leaderboard_guard = data.leaderboard.lock().unwrap();
     println!("tempo: {:?}", time);
     if let Some(user) = leaderboard_guard
         .iter_mut()

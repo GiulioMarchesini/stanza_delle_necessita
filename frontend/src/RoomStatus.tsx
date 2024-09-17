@@ -23,10 +23,21 @@ interface RoomState {
 }
 
 function RoomStatus({ username }: RoomStatusProps) {
-  // TODO fetch di stato stanza e chi la occupa
   const [isRoomOccupied, setIsRoomOccupied] = useState(false);
   const [occupant, setOccupant] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<User[]>([]);
+
+  function ottieniIp() {
+    // fetch("https://api64.ipify.org?format=json")
+    //   .then((response) => response.json())
+    //   .then((data) => {
+    //     console.log("Il tuo IP è", data.ip);
+    //   })
+    //   .catch((error) => {
+    //     console.error("Errore:", error);
+    //   });
+    // TODO ip nella rete locale. es 192.168.0.61
+  }
 
   // fetch di stato stanza e chi la occupa. http request "/room_status"
   async function fetchRoomStatus() {
@@ -151,6 +162,9 @@ function RoomStatus({ username }: RoomStatusProps) {
 
   return (
     <div className="RoomStatus">
+      <button type="button" onClick={ottieniIp}>
+        Ip
+      </button>
       <h2>Stato della stanza</h2>
       <p>La stanza è attualmente {isRoomOccupied ? "occupata" : "libera"}.</p>
       {isRoomOccupied && occupant === username && (

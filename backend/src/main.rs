@@ -1,10 +1,11 @@
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
+use chrono::Local;
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::sync::{Mutex, MutexGuard};
-
 #[derive(Serialize, Deserialize, Debug)]
 struct User {
     username: String,
@@ -132,6 +133,26 @@ async fn leaderboard(data: web::Data<AppState>) -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    // ottieni data di oggi
+    let today = Local::now().date_naive();
+    // crea una stringa partendo dalla data con numero del mese e anno
+    let today = today.format("%m-%Y").to_string();
+    // prova ad aprire un file csv con il nome della data, se non esiste crea un nuovo file
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(format!("{}.csv", today))
+        .unwrap();
+
+    // leggi il contenuto del file csv e salvalo in un vettore di tipo User
+    let mut file_leaderboard = Vec::new();
+    let mut reader = csv::Reader::from_reader(file);
+    for result in reader.deserialize() {
+        let user: User = result.unwrap();
+        file_leaderboard.push(user);
+    }
+
     let app_state = web::Data::new(AppState {
         room: Mutex::new(RoomState {
             is_free: true,
@@ -140,7 +161,7 @@ async fn main() -> std::io::Result<()> {
             start_time: None,
             end_time: None,
         }),
-        leaderboard: Mutex::new(Vec::new()),
+        leaderboard: Mutex::new(file_leaderboard),
     });
 
     HttpServer::new(move || {
@@ -177,8 +198,24 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
             total_time: time,
         });
     }
+    // ordina la classifica in base al tempo totale
+    leaderboard_guard.sort_by(|a, b| b.total_time.cmp(&a.total_time));
     println!("{:?}", leaderboard_guard);
+    // salva la classifica aggiornata nel file csv
+    let today = Local::now().date_naive();
+    let today = today.format("%m-%Y").to_string();
+    let file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(format!("{}.csv", today))
+        .unwrap();
+    let mut writer = csv::Writer::from_writer(file);
+    for user in leaderboard_guard.iter() {
+        writer.serialize(user).unwrap();
+    }
+    writer.flush().unwrap();
+
+    println!("Leaderboard aggiornata");
 }
 
-// TODO salva classifica in un file csv locale
 // TODO se stanza occupata per più di mezz'ora, libera automaticamente e non aggiornare leaderboard

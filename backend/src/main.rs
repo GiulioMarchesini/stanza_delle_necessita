@@ -1,7 +1,8 @@
 use actix_cors::Cors;
 use actix_files::Files;
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use std::sync::{Mutex, MutexGuard};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -14,6 +15,7 @@ struct User {
 struct RoomState {
     is_free: bool,
     current_user: Option<String>,
+    ip_user: Option<String>,
     start_time: Option<u64>, // timestamp in secondi
     end_time: Option<u64>,   // timestamp in secondi
 }
@@ -24,7 +26,11 @@ struct AppState {
 }
 
 #[post("/occupy_room")]
-async fn occupy_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) -> impl Responder {
+async fn occupy_room(
+    data: web::Data<AppState>,
+    new_room: web::Json<RoomState>,
+    req: HttpRequest,
+) -> impl Responder {
     let mut room = data.room.lock().unwrap();
     let actix_web::web::Json(RoomState {
         current_user,
@@ -32,9 +38,21 @@ async fn occupy_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) 
         ..
     }) = new_room;
 
+    // Ottieni l'indirizzo IP del client
+    let ip: Option<SocketAddr> = req.peer_addr();
+    let ip = ip
+        .unwrap()
+        .to_string()
+        .split(':')
+        .next()
+        .unwrap()
+        .parse()
+        .ok();
+    println!("IP del client che vuole OCCUPY: {:?}", ip);
+
     if room.is_free {
         // controlla che current_user e start_time siano presenti
-        if current_user.is_none() || start_time.is_none() {
+        if current_user.is_none() || start_time.is_none() || ip.is_none() {
             return HttpResponse::BadRequest().json("current_user and start_time are required");
         }
 
@@ -42,6 +60,7 @@ async fn occupy_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) 
         println!("stanza occupata da User: {:?}", current_user);
         room.current_user = current_user;
         room.start_time = start_time;
+        room.ip_user = ip;
         HttpResponse::Ok().json("Room occupied")
     } else {
         HttpResponse::Ok().json("Room is currently occupied")
@@ -49,7 +68,11 @@ async fn occupy_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) 
 }
 
 #[post("/free_room")]
-async fn free_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) -> impl Responder {
+async fn free_room(
+    data: web::Data<AppState>,
+    new_room: web::Json<RoomState>,
+    req: HttpRequest,
+) -> impl Responder {
     let mut room = data.room.lock().unwrap();
 
     let actix_web::web::Json(RoomState {
@@ -58,12 +81,25 @@ async fn free_room(data: web::Data<AppState>, new_room: web::Json<RoomState>) ->
         ..
     }) = new_room;
 
+    // Ottieni l'indirizzo IP del client
+    let ip: Option<SocketAddr> = req.peer_addr();
+    // converto IP in Option<String> e tolgo quello che viene dopo i due punti. es 192.168.0.61:62604 -> 192.168.0.61
+    let ip = ip
+        .unwrap()
+        .to_string()
+        .split(':')
+        .next()
+        .unwrap()
+        .parse()
+        .ok();
+    println!("IP del client che vuole FREE: {:?}", ip);
+
     // controlla che current_user e end_time siano presenti
-    if current_user.is_none() || end_time.is_none() {
+    if current_user.is_none() || end_time.is_none() || ip.is_none() {
         return HttpResponse::BadRequest().json("current_user and end_time are required");
     }
 
-    if !room.is_free && room.current_user == current_user {
+    if !room.is_free && room.current_user == current_user && room.ip_user == ip {
         let current_user = current_user.unwrap();
         println!("stanza liberata da User: {:?}", current_user);
         room.is_free = true;
@@ -93,13 +129,14 @@ async fn leaderboard(data: web::Data<AppState>) -> impl Responder {
     let leaderboard = data.leaderboard.lock().unwrap();
     HttpResponse::Ok().json(&*leaderboard)
 }
-// TODO salva leaderboard in un file csv locale
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
         room: Mutex::new(RoomState {
             is_free: true,
             current_user: None,
+            ip_user: None,
             start_time: None,
             end_time: None,
         }),
@@ -121,13 +158,13 @@ async fn main() -> std::io::Result<()> {
             .service(free_room)
             .service(Files::new("/", "./frontend/build").index_file("index.html"))
     })
-    .bind("192.168.0.61:8080")?
+    .bind("192.168.0.61:8081")?
     .run()
     .await
 }
 
 fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGuard<Vec<User>>) {
-    // let mut leaderboard_guard = data.leaderboard.lock().unwrap();
+    // ordinamento decrescente per tempo
     println!("tempo: {:?}", time);
     if let Some(user) = leaderboard_guard
         .iter_mut()
@@ -143,6 +180,5 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     println!("{:?}", leaderboard_guard);
 }
 
-// TODO controlla ip per occupare e liberare stanza
 // TODO salva classifica in un file csv locale
 // TODO se stanza occupata per più di mezz'ora, libera automaticamente e non aggiornare leaderboard

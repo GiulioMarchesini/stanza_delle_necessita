@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::sync::{Mutex, MutexGuard};
+use std::thread;
 #[derive(Serialize, Deserialize, Debug)]
 struct User {
     username: String,
@@ -62,6 +63,7 @@ async fn occupy_room(
         room.current_user = current_user;
         room.start_time = start_time;
         room.ip_user = ip;
+
         HttpResponse::Ok().json("Room occupied")
     } else {
         HttpResponse::Ok().json("Room is currently occupied")
@@ -164,6 +166,26 @@ async fn main() -> std::io::Result<()> {
         leaderboard: Mutex::new(file_leaderboard),
     });
 
+    // Avvia un thread separato per controllare periodicamente lo stato della stanza
+    let app_state_clone = app_state.clone();
+    std::thread::spawn(move || loop {
+        thread::sleep(std::time::Duration::from_secs(60));
+        let mut room = app_state_clone.room.lock().unwrap();
+        if !room.is_free {
+            let now = Local::now().timestamp();
+            let now = now as u64; // in secondi
+            if let Some(start_time) = room.start_time {
+                if now - start_time > 1800 {
+                    room.is_free = true;
+                    room.current_user = None;
+                    room.start_time = None;
+                    room.end_time = None;
+                    println!("Stanza liberata automaticamente");
+                }
+            }
+        }
+    });
+
     HttpServer::new(move || {
         App::new()
             .wrap(
@@ -217,5 +239,3 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
 
     println!("Leaderboard aggiornata");
 }
-
-// TODO se stanza occupata per più di mezz'ora, libera automaticamente e non aggiornare leaderboard

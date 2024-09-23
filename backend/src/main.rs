@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"] // per non far apparire la console su windows
+
 use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{get, post, web, App, HttpRequest, HttpResponse, HttpServer, Responder};
@@ -50,7 +52,7 @@ async fn occupy_room(
         .unwrap()
         .parse()
         .ok();
-    println!("IP del client che vuole OCCUPY: {:?}", ip);
+    // println!("IP del client che vuole OCCUPY: {:?}", ip);
 
     if room.is_free {
         // controlla che current_user e start_time siano presenti
@@ -59,14 +61,14 @@ async fn occupy_room(
         }
 
         room.is_free = false;
-        println!("stanza occupata da User: {:?}", current_user);
+        // println!("stanza occupata da User: {:?}", current_user);
         room.current_user = current_user;
         room.start_time = start_time;
         room.ip_user = ip;
 
-        HttpResponse::Ok().json("Room occupied")
+        HttpResponse::Ok().json("stanca occupata, buon divertimento 😉")
     } else {
-        HttpResponse::Ok().json("Room is currently occupied")
+        HttpResponse::Ok().json("la stanza è già occupata 😢, trattieniti")
     }
 }
 
@@ -95,7 +97,7 @@ async fn free_room(
         .unwrap()
         .parse()
         .ok();
-    println!("IP del client che vuole FREE: {:?}", ip);
+    // println!("IP del client che vuole FREE: {:?}", ip);
 
     // controlla che current_user e end_time siano presenti
     if current_user.is_none() || end_time.is_none() || ip.is_none() {
@@ -104,18 +106,19 @@ async fn free_room(
 
     if !room.is_free && room.current_user == current_user && room.ip_user == ip {
         let current_user = current_user.unwrap();
-        println!("stanza liberata da User: {:?}", current_user);
+        // println!("stanza liberata da User: {:?}", current_user);
         room.is_free = true;
         room.current_user = None;
         room.end_time = end_time;
-        println!("{:?}", room);
+        // println!("{:?}", room);
         // il mutex di data è già lockato, non posso usare data direttamente
         let time = (room.end_time.unwrap() - room.start_time.unwrap()) / 60;
         let leaderboard_guard = data.leaderboard.lock().unwrap();
         update_leaderboard(current_user.as_ref(), time, leaderboard_guard);
-        HttpResponse::Ok().json("Room freed")
+        HttpResponse::Ok().json("stanza liberata, alla prossima 😊")
     } else {
-        HttpResponse::Ok().json("You cannot free the room")
+        HttpResponse::Ok()
+            .json("non puoi liberare la stanza, prova ad andare a bussare o aspetta il tuo turno")
     }
 }
 
@@ -180,7 +183,7 @@ async fn main() -> std::io::Result<()> {
                     room.current_user = None;
                     room.start_time = None;
                     room.end_time = None;
-                    println!("Stanza liberata automaticamente");
+                    // println!("Stanza liberata automaticamente");
                 }
             }
         }
@@ -201,14 +204,14 @@ async fn main() -> std::io::Result<()> {
             .service(free_room)
             .service(Files::new("/", "./frontend/build").index_file("index.html"))
     })
-    .bind("192.168.0.61:8081")?
+    .bind("192.168.0.130:9696")?
     .run()
     .await
 }
 
 fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGuard<Vec<User>>) {
     // ordinamento decrescente per tempo
-    println!("tempo: {:?}", time);
+    // println!("tempo: {:?}", time);
     if let Some(user) = leaderboard_guard
         .iter_mut()
         .find(|u| u.username == username)
@@ -222,7 +225,7 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     }
     // ordina la classifica in base al tempo totale
     leaderboard_guard.sort_by(|a, b| b.total_time.cmp(&a.total_time));
-    println!("{:?}", leaderboard_guard);
+    // println!("{:?}", leaderboard_guard);
     // salva la classifica aggiornata nel file csv
     let today = Local::now().date_naive();
     let today = today.format("%m-%Y").to_string();
@@ -237,5 +240,5 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     }
     writer.flush().unwrap();
 
-    println!("Leaderboard aggiornata");
+    // println!("Leaderboard aggiornata");
 }

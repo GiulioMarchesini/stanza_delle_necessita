@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Leaderboard from "./Leaderboard";
 
-const url = "http://192.168.0.130:9696";
+const url = "http://192.168.0.131:9696";
 // TODO ottieni l'url
-// TODO metti tutti i tipi in un file a parte
 
 interface RoomStatusProps {
   username: string;

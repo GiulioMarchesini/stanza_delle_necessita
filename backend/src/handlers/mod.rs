@@ -1,5 +1,6 @@
 use actix_web::{get, post, web, HttpRequest, HttpResponse, Responder};
 use chrono::Local;
+use std::env;
 use std::fs::OpenOptions;
 use std::net::SocketAddr;
 use std::sync::MutexGuard;
@@ -29,7 +30,7 @@ async fn occupy_room(
         .unwrap()
         .parse()
         .ok();
-    // println!("IP del client che vuole OCCUPY: {:?}", ip);
+    println!("IP del client che vuole OCCUPY: {:?}", ip);
 
     if room.is_free {
         // controlla che current_user e start_time siano presenti
@@ -38,7 +39,7 @@ async fn occupy_room(
         }
 
         room.is_free = false;
-        // println!("stanza occupata da User: {:?}", current_user);
+        println!("stanza occupata da User: {:?}", current_user);
         room.current_user = current_user;
         room.start_time = start_time;
         room.ip_user = ip;
@@ -74,7 +75,7 @@ async fn free_room(
         .unwrap()
         .parse()
         .ok();
-    // println!("IP del client che vuole FREE: {:?}", ip);
+    println!("IP del client che vuole FREE: {:?}", ip);
 
     // controlla che current_user e end_time siano presenti
     if current_user.is_none() || end_time.is_none() || ip.is_none() {
@@ -83,11 +84,11 @@ async fn free_room(
 
     if !room.is_free && room.current_user == current_user && room.ip_user == ip {
         let current_user = current_user.unwrap();
-        // println!("stanza liberata da User: {:?}", current_user);
+        println!("stanza liberata da User: {:?}", current_user);
         room.is_free = true;
         room.current_user = None;
         room.end_time = end_time;
-        // println!("{:?}", room);
+        println!("{:?}", room);
         // il mutex di data è già lockato, non posso usare data direttamente
         let time = (room.end_time.unwrap() - room.start_time.unwrap()) / 60;
         let leaderboard_guard = data.leaderboard.lock().unwrap();
@@ -114,8 +115,36 @@ async fn leaderboard(data: web::Data<AppState>) -> impl Responder {
 }
 
 fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGuard<Vec<User>>) {
-    // ordinamento decrescente per tempo
-    // println!("tempo: {:?}", time);
+    // carica la classifica dal file csv
+    let today = Local::now().date_naive();
+    let today = today.format("%m-%Y").to_string();
+    // apri il file csv e leggi il contenuto, se non esiste crea un nuovo file
+    let current_dir = env::current_dir().unwrap();
+    let file_path = current_dir.join(format!("{}.csv", today));
+    println!("{:?}", file_path);
+
+    let file = match OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(&file_path)
+    {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Errore nell'aprire il file CSV: {:?}", e);
+            return;
+        }
+    };
+    let mut reader = csv::Reader::from_reader(file);
+    let mut file_leaderboard = Vec::new();
+    for result in reader.deserialize() {
+        let user: User = result.unwrap();
+        file_leaderboard.push(user);
+    }
+    // aggiorna leaderboard_guard con il contenuto del file csv
+    *leaderboard_guard = file_leaderboard;
+
+    // aggiorno la classifica con il nuovo tempo. ordinamento decrescente per tempo
     if let Some(user) = leaderboard_guard
         .iter_mut()
         .find(|u| u.username == username)
@@ -129,14 +158,14 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     }
     // ordina la classifica in base al tempo totale
     leaderboard_guard.sort_by(|a, b| b.total_time.cmp(&a.total_time));
-    // println!("{:?}", leaderboard_guard);
-    // salva la classifica aggiornata nel file csv
-    let today = Local::now().date_naive();
-    let today = today.format("%m-%Y").to_string();
+    println!("{:?}", leaderboard_guard);
+
+    // salva la classifica aggiornata nel file csv, se non esiste crea un nuovo file
     let file = OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open(format!("{}.csv", today))
+        .create(true)
+        .open(file_path)
         .unwrap();
     let mut writer = csv::Writer::from_writer(file);
     for user in leaderboard_guard.iter() {
@@ -144,5 +173,5 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     }
     writer.flush().unwrap();
 
-    // println!("Leaderboard aggiornata");
+    println!("Leaderboard aggiornata");
 }

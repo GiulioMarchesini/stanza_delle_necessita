@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"] // per non far apparire la console su windows
+// #![windows_subsystem = "windows"] // per non far apparire la console su windows
 mod handlers;
 mod models;
 
@@ -9,6 +9,7 @@ use actix_cors::Cors;
 use actix_files::Files;
 use actix_web::{web, App, HttpServer};
 use chrono::Local;
+use std::env;
 use std::fs::OpenOptions;
 use std::sync::Mutex;
 use std::thread;
@@ -20,11 +21,15 @@ async fn main() -> std::io::Result<()> {
     // crea una stringa partendo dalla data con numero del mese e anno
     let today = today.format("%m-%Y").to_string();
     // prova ad aprire un file csv con il nome della data, se non esiste crea un nuovo file
+    let current_dir = env::current_dir().unwrap();
+    let file_path = current_dir.join(format!("{}.csv", today));
+    println!("{:?}", file_path);
+
     let file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open(format!("{}.csv", today))
+        .open(file_path)
         .unwrap();
 
     // leggi il contenuto del file csv e salvalo in un vettore di tipo User
@@ -60,11 +65,14 @@ async fn main() -> std::io::Result<()> {
                     room.current_user = None;
                     room.start_time = None;
                     room.end_time = None;
-                    // println!("Stanza liberata automaticamente");
+                    println!("Stanza liberata automaticamente");
                 }
             }
         }
     });
+
+    let server_ip = "192.168.0.61:9696";
+    println!("Server running at http://{}", server_ip);
 
     HttpServer::new(move || {
         App::new()
@@ -81,7 +89,7 @@ async fn main() -> std::io::Result<()> {
             .service(free_room)
             .service(Files::new("/", "./frontend/build").index_file("index.html"))
     })
-    .bind("127.0.0.1:9696")?
+    .bind(server_ip)?
     .run()
     .await
 }

@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"] // per non far apparire la console su windows
+#![windows_subsystem = "windows"] // per non far apparire la console su windows // TODO commenta per usare println!()
 mod handlers;
 mod models;
 

@@ -121,27 +121,27 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     // apri il file csv e leggi il contenuto, se non esiste crea un nuovo file
     let current_dir = env::current_dir().unwrap();
     let file_path = current_dir.join(format!("{}.csv", today));
-    println!("{:?}", file_path);
 
-    let file = match OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(&file_path)
-    {
-        Ok(file) => file,
-        Err(e) => {
-            eprintln!("Errore nell'aprire il file CSV: {:?}", e);
-            return;
-        }
-    };
-    let mut reader = csv::Reader::from_reader(file);
-    let mut file_leaderboard = Vec::new();
-    for result in reader.deserialize() {
-        let user: User = result.unwrap();
-        file_leaderboard.push(user);
+    let mut file_leaderboard: Vec<User> = Vec::new();
+    // controlla se il file esiste. se esiste carica i dati sul vec
+    if file_path.exists() {
+        match OpenOptions::new().read(true).open(&file_path) {
+            Ok(file) => {
+                let mut reader = csv::Reader::from_reader(file);
+                for result in reader.deserialize() {
+                    let user: User = result.unwrap();
+                    file_leaderboard.push(user);
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "Errore nell'aprire il file CSV: {:?}, la classifica verrà resettata",
+                    e
+                );
+            }
+        };
     }
-    // aggiorna leaderboard_guard con il contenuto del file csv
+    // aggiorna leaderboard_guard con il contenuto del file csv se esiste, altrimenti usa il vec vuoto
     *leaderboard_guard = file_leaderboard;
 
     // aggiorno la classifica con il nuovo tempo. ordinamento decrescente per tempo
@@ -158,20 +158,23 @@ fn update_leaderboard(username: &str, time: u64, mut leaderboard_guard: MutexGua
     }
     // ordina la classifica in base al tempo totale
     leaderboard_guard.sort_by(|a, b| b.total_time.cmp(&a.total_time));
-    println!("{:?}", leaderboard_guard);
 
     // salva la classifica aggiornata nel file csv, se non esiste crea un nuovo file
-    let file = OpenOptions::new()
+    match OpenOptions::new()
         .write(true)
         .truncate(true)
         .create(true)
-        .open(file_path)
-        .unwrap();
-    let mut writer = csv::Writer::from_writer(file);
-    for user in leaderboard_guard.iter() {
-        writer.serialize(user).unwrap();
-    }
-    writer.flush().unwrap();
-
-    println!("Leaderboard aggiornata");
+        .open(&file_path)
+    {
+        Ok(file) => {
+            let mut writer = csv::Writer::from_writer(file);
+            for user in leaderboard_guard.iter() {
+                writer.serialize(user).unwrap();
+            }
+            writer.flush().unwrap();
+        }
+        Err(e) => {
+            eprintln!("Errore nell'creare il file CSV: {:?}", e);
+        }
+    };
 }

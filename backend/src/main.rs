@@ -71,7 +71,9 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
-    let server_ip = "192.168.0.61:9696";
+    // let server_ip = "192.168.0.61:9696";
+    let server_ip = "192.168.0.131:9696";
+
     println!("Server running at http://{}", server_ip);
 
     HttpServer::new(move || {
@@ -93,3 +95,5 @@ async fn main() -> std::io::Result<()> {
     .run()
     .await
 }
+
+// TODO rimuovere gli unwrap e gestire gli errori
